@@ -55,9 +55,7 @@ const getProducts = asyncHandler(async (req, res, next) => {
         const fields = req.query.fields.split(',').join(' ')
         queryCommand = queryCommand.select(fields)
     }
-    else {
-        queryCommand = queryCommand.select('-__v')
-    }
+
     //Pagination
     const page = +req.query.page * 1 || 1;
     const limit = +req.query.limit * 1 || 10;
@@ -75,9 +73,6 @@ const getProducts = asyncHandler(async (req, res, next) => {
             }
         })
     }).catch(next)
-
-
-
 })
 const updateProduct = asyncHandler(async (req, res) => {
     const { pid } = req.params
@@ -103,10 +98,33 @@ const deleteProduct = asyncHandler(async (req, res) => {
         }
     })
 })
+const ratings = asyncHandler(async (req, res) => {
+    const { _id } = req.user
+    const { star, comment, pid } = req.body
+    if (!_id || !pid) throw new Error('Nhập thiếu thông tin')
+    const ratingProduct = await Product.findById(pid)
+    const alreadyRating = ratingProduct?.ratings?.find(el => el.postedBy.toString() === _id)
+    if (alreadyRating) {
+        await Product.updateOne({
+            ratings: { $elemMatch: alreadyRating }
+        }, {
+            $set: { "ratings.$.star": star, "ratings.$.comment": comment }
+        }, { new: true })
+    }
+    else {
+        await Product.findByIdAndUpdate(pid, {
+            $push: { ratings: { start, comment, postedBy: _id } }
+        }, { new: true })
+    }
+    return res.status(200).json({
+        status: 0
+    })
+})
 module.exports = {
     createProduct,
     getProduct,
     getProducts,
     updateProduct,
     deleteProduct,
+    ratings,
 }

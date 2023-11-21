@@ -18,6 +18,7 @@ const verifyAccessToken = asyncHandler(async (req, res, next) => {
             //decode là cái bỏ vào để tạo token
             //  console.log(decode)
             req.user = decode
+            console.log(decode)
             next()
         })
     }
