@@ -2,6 +2,8 @@ const Product = require('../models/product')
 const asyncHandler = require('express-async-handler')
 const slugify = require('slugify')
 const product = require('../models/product')
+const util = require('util')
+const { query } = require('express')
 const createProduct = asyncHandler(async (req, res) => {
     if (Object.keys(req.body).length == 0) throw new Error('Mising inputs')
     if (req.body && req.body.title) req.body.slug = slugify(req.body.title)
@@ -25,15 +27,57 @@ const getProduct = asyncHandler(async (req, res) => {
         }
     })
 })
-const getProducts = asyncHandler(async (req, res) => {
-    const products = await Product.find()
-    return res.status(200).json({
-        success: products ? true : false,
-        data: {
-            message: products ? "Lấy ra sản phẩm" : "lấy sản phẩm thất bại",
-            products: products ? products : null
-        }
-    })
+//filtering, sorting, paginaytion
+const getProducts = asyncHandler(async (req, res, next) => {
+    const queries = { ...req.query }
+    const excludedFields = ['page', 'sort', 'limit', 'fields']
+    excludedFields.forEach(item => delete queries[item])
+    //advanced filtering 
+    let queryString = JSON.stringify(queries)
+    //tìm chỗi gte thay thế bằng => $get
+    queryString = queryString.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`)
+    const formatedQueries = JSON.parse(queryString)
+
+    //filtering
+    //regex: , 'i': không phân biệt hoa thường
+    if (queries?.title) formatedQueries.title = { $regex: queries.title, $options: 'i' }
+    let queryCommand = Product.find(formatedQueries)
+    //sorting
+    if (req.query.sort) {
+        const sortBy = req.query.sort.split(',').join(' ')
+        queryCommand = queryCommand.sort(sortBy)
+    }
+    else {
+        queryCommand = queryCommand.sort('-createAt')
+    }
+    //Field limiting
+    if (req.query.fields) {
+        const fields = req.query.fields.split(',').join(' ')
+        queryCommand = queryCommand.select(fields)
+    }
+    else {
+        queryCommand = queryCommand.select('-__v')
+    }
+    //Pagination
+    const page = +req.query.page * 1 || 1;
+    const limit = +req.query.limit * 1 || 10;
+    const skip = (page - 1) * limit;
+    queryCommand = queryCommand.skip(skip).limit(limit);
+    //  Execute query
+    queryCommand.then(async (response) => {
+        const counts = await Product.find(formatedQueries).countDocuments()
+        res.status(200).json({
+            success: response ? true : false,
+            data: {
+                message: response ? "Lấy ra sản phẩm" : "lấy sản phẩm thất bại",
+                counts,
+                products: response ? response : null,
+            }
+        })
+    }).catch(next)
+
+
+
 })
 const updateProduct = asyncHandler(async (req, res) => {
     const { pid } = req.params
