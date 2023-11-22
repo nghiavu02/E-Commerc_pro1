@@ -99,27 +99,36 @@ const deleteProduct = asyncHandler(async (req, res) => {
     })
 })
 const ratings = asyncHandler(async (req, res) => {
-    const { _id } = req.user
-    const { star, comment, pid } = req.body
-    if (!_id || !pid) throw new Error('Nhập thiếu thông tin')
-    const ratingProduct = await Product.findById(pid)
-    const alreadyRating = ratingProduct?.ratings?.find(el => el.postedBy.toString() === _id)
+    const { _id } = req.user;
+    const { star, comment, pid } = req.body;
+    if (!_id || !pid) throw new Error('Nhập thiếu thông tin');
+    const ratingProduct = await Product.findById(pid);
+    const alreadyRating = ratingProduct?.ratings?.find(
+        (el) => el.postedBy.toString() === _id.toString()
+    );
     if (alreadyRating) {
-        await Product.updateOne({
-            ratings: { $elemMatch: alreadyRating }
-        }, {
-            $set: { "ratings.$.star": star, "ratings.$.comment": comment }
-        }, { new: true })
-    }
-    else {
+        await Product.updateOne(
+            {
+                ratings: { $elemMatch: { postedBy: _id } },
+            },
+            {
+                $set: { 'ratings.$.star': star, 'ratings.$.comment': comment },
+            }
+        );
+    } else {
         await Product.findByIdAndUpdate(pid, {
-            $push: { ratings: { start, comment, postedBy: _id } }
-        }, { new: true })
+            $push: { ratings: { star, comment, postedBy: _id } },
+        });
     }
+    const updatedProduct = await Product.findById(pid)
+    const ratingCount = updateProduct.ratings.length
+    const sumRatings = updatedProduct.ratings.reduce((sum, e) => sum + +el.star, 0)
+    updatedProduct.totalRating = Math.round(sumRatings * 10 / ratingCount) / 10
+    await updatedProduct.save()
     return res.status(200).json({
-        status: 0
-    })
-})
+        status: true,
+    });
+});
 module.exports = {
     createProduct,
     getProduct,
